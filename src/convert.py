@@ -14,10 +14,9 @@ for c in class_names: internal_test[c] = 0
 for idx, row in tqdm(internal_test.iterrows()):
     txt = row[1]
     trainidx = dic[txt]
-    for c in class_names: internal_test[c][idx] = train[c][idx]
+    for c in class_names: internal_test[c][idx] = train[c][trainidx]
 
 
 print(internal_test.head())
 
-internal_test.to_csv('internal_test_with_answer.csv')
-
+internal_test.to_csv('internal_test_with_answer.csv', index=False)

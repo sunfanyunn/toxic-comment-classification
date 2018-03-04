@@ -132,7 +132,7 @@ for class_name in class_names:
     print(class_name)
     train_target = train[class_name]
     model = LogisticRegression(solver='sag')
-    sfm = SelectFromModel(model)
+    sfm = SelectFromModel(model, threshold=.2)
     
     print('Train: before feature selection\'s shape: ', train_features.shape)
     train_sparse_matrix = sfm.fit_transform(train_features, train_target)
