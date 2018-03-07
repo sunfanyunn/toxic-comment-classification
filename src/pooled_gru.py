@@ -1,9 +1,4 @@
-
 # coding: utf-8
-
-# In[1]:
-
-
 import numpy as np
 np.random.seed(42)
 import pandas as pd
@@ -24,6 +19,9 @@ import os
 os.environ['OMP_NUM_THREADS'] = '4'
 
 
+# In[13]:
+
+
 # In[2]:
 
 
@@ -39,7 +37,9 @@ X_test = test["comment_text"].fillna("fillna").values
 
 # In[3]:
 
-
+##########
+# parameters
+###########
 max_features = 30000
 maxlen = 100
 embed_size = 300
@@ -81,17 +81,22 @@ class RocAucEvaluation(Callback):
             print("\n ROC-AUC - epoch: %d - score: %.6f \n" % (epoch+1, score))
 
 
+
 def get_model():
     inp = Input(shape=(maxlen, ))
     x = Embedding(max_features, embed_size, weights=[embedding_matrix])(inp)
     x = SpatialDropout1D(0.2)(x)
     x = Bidirectional(GRU(80, return_sequences=True))(x)
     avg_pool = GlobalAveragePooling1D()(x)
+    print(avg_pool.get_shape())
     max_pool = GlobalMaxPooling1D()(x)
-    conc = concatenate([avg_pool, max_pool])
-    outp = Dense(6, activation="sigmoid")(conc)
-    
-    model = Model(inputs=inp, outputs=outp)
+#    print(max_pool.shape)
+    conc = concatenate([avg_pool, max_pool, x[:,-1,:]])
+    print(conc.get_shape())
+#    outp = Dense(6, activation="sigmoid")(conc)
+
+#    model = Model(inputs=inp, outputs=outp)
+    model = Model(inputs=inp, outputs=conc)
     model.compile(loss='binary_crossentropy',
                   optimizer='adam',
                   metrics=['accuracy'])
@@ -99,11 +104,9 @@ def get_model():
     return model
 
 
-# In[13]:
-
-
 model = get_model()
 print(model.summary())
+
 
 
 # In[ ]:
@@ -118,14 +121,7 @@ RocAuc = RocAucEvaluation(validation_data=(X_val, y_val), interval=1)
 hist = model.fit(X_tra, y_tra, batch_size=batch_size, epochs=epochs, validation_data=(X_val, y_val),
                 callbacks=[RocAuc], verbose=2)
 
-submission = pd.read_csv('input/sample_submission.csv')
+submission = pd.read_csv('../input/sample_submission.csv')
 y_pred = model.predict(x_test, batch_size=1024)
 submission[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]] = y_pred
 submission.to_csv('submission.csv', index=False)
-
-
-# In[2]:
-
-
-model = get_model()
-print(model.summary())
