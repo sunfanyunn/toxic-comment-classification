@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
 
 from keras.models import Model
-from keras.layers import Input, Dense, Embedding, SpatialDropout1D, concatenate
+from keras.layers import Input, Dense, Embedding, SpatialDropout1D, concatenate, Flatten, Lambda
 from keras.layers import GRU, Bidirectional, GlobalAveragePooling1D, GlobalMaxPooling1D
 from keras.preprocessing import text, sequence
 from keras.callbacks import Callback
@@ -40,8 +40,8 @@ X_test = test["comment_text"].fillna("fillna").values
 ##########
 # parameters
 ###########
-max_features = 30000
-maxlen = 100
+max_features = 50000
+maxlen = 200
 embed_size = 300
 
 tokenizer = text.Tokenizer(num_words=max_features)
@@ -88,15 +88,18 @@ def get_model():
     x = SpatialDropout1D(0.2)(x)
     x = Bidirectional(GRU(80, return_sequences=True))(x)
     avg_pool = GlobalAveragePooling1D()(x)
-    print(avg_pool.get_shape())
+#    print(avg_ponol.get_shape())
     max_pool = GlobalMaxPooling1D()(x)
 #    print(max_pool.shape)
-    conc = concatenate([avg_pool, max_pool, x[:,-1,:]])
-    print(conc.get_shape())
-#    outp = Dense(6, activation="sigmoid")(conc)
+    def slice(x):
+        return x[:,-1,:]
+    conc = concatenate([avg_pool, max_pool, Lambda(slice)(x) ])
 
-#    model = Model(inputs=inp, outputs=outp)
-    model = Model(inputs=inp, outputs=conc)
+#    print(conc.get_shape())
+    outp = Dense(6, activation="sigmoid")(conc)
+
+    model = Model(inputs=inp, outputs=outp)
+#    model = Model(inputs=inp, outputs=conc)
     model.compile(loss='binary_crossentropy',
                   optimizer='adam',
                   metrics=['accuracy'])
@@ -113,7 +116,7 @@ print(model.summary())
 
 
 batch_size = 32
-epochs = 2
+epochs = 5
 
 X_tra, X_val, y_tra, y_val = train_test_split(x_train, y_train, train_size=0.95, random_state=233)
 RocAuc = RocAucEvaluation(validation_data=(X_val, y_val), interval=1)
@@ -124,4 +127,4 @@ hist = model.fit(X_tra, y_tra, batch_size=batch_size, epochs=epochs, validation_
 submission = pd.read_csv('../input/sample_submission.csv')
 y_pred = model.predict(x_test, batch_size=1024)
 submission[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]] = y_pred
-submission.to_csv('submission.csv', index=False)
+submission.to_csv('pooled_gru.csv', index=False)
