@@ -1,3 +1,10 @@
+# Use scikit-learn to grid search the batch size and epochs
+from sklearn.model_selection import GridSearchCV, KFold
+from sklearn.cross_validation import StratifiedKFold
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.wrappers.scikit_learn import KerasClassifier
+# Use scikit-learn to grid search the batch size and epochs
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
 
@@ -6,7 +13,6 @@ from keras.layers import Input, Dense, Embedding, SpatialDropout1D, concatenate,
 from keras.layers import GRU, Bidirectional, GlobalAveragePooling1D, GlobalMaxPooling1D
 from keras.preprocessing import text, sequence
 from keras.callbacks import Callback
-
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -74,8 +80,6 @@ def build_model():
     x = Dropout(0.5)(conc)
     x = Dense(512)(x)
     x = Dropout(0.5)(x)
-    x = Dense(64)(x)
-    x = Dropout(0.5)(x)
     outp = Dense(6, activation="sigmoid")(x)
 
     model = Model(inputs=inp, outputs=outp)
@@ -83,10 +87,9 @@ def build_model():
                   optimizer='adam',
                   metrics=['accuracy'])
 
+    model.summary()
     return model
 
-model = build_model()  # TODO: Implement
-print(model.summary())
 
 print('\nLoading FT model')
 ft_model =load_model('ft_model.bin')
@@ -137,21 +140,14 @@ class RocAucEvaluation(Callback):
             print("\n ROC-AUC - epoch: %d - score: %.6f \n" % (epoch+1, score))
 
 
-#x_train = df_to_data(train)
-#y_train = train[classes].values
-
 #x_test = df_to_data(test)
 #y_test = test[classes].values
 
 # Split the dataset:
-split_index = round(len(train) * 0.9)
-shuffled_train = train.sample(frac=1)
-df_train = shuffled_train.iloc[:split_index]
-df_val = shuffled_train.iloc[split_index:]
 
 # Convert validation set to fixed array
-x_val = df_to_data(df_val)
-y_val = df_val[classes].values
+#x_val = df_to_data(df_val)
+#y_val = df_val[classes].values
 
 def data_generator(df, batch_size):
     """
@@ -183,26 +179,53 @@ def data_generator(df, batch_size):
                 batch_i = 0
 
 
-batch_size = 128
-training_steps_per_epoch = round(len(df_train) / batch_size)
-training_generator = data_generator(df_train, batch_size)
+from customized_callback import MyModelCheckpoint
 
-RocAuc = RocAucEvaluation(validation_data=(x_val, y_val), interval=1)
+if __name__=='__main__':
+    n_folds = 10
+    batch_sizes = [32, 128, 512, 1024]
+    epochs = [5]
+    # Ready to start training:
+    skf = KFold(n_splits=n_folds, shuffle=True, random_state=233).split(train)
+    for epoch, batch_size in zip(epochs, batch_sizes):
+        print(batch_size, epoch)
+        for i, (trainidx, testidx) in enumerate(skf):
+            if i >= 2: break
+            print ("Running Fold", i+1, "/", n_folds)
 
-# Ready to start training:
-model.fit_generator(
-    training_generator,
-    steps_per_epoch=training_steps_per_epoch,
-#    batch_size=batch_size,
-    epochs=20,
-    callbacks=[RocAuc],
-    validation_data=(x_val, y_val)
-)
+            df_train = train.iloc[trainidx]
+            df_val = train.iloc[testidx]
+            print(df_train.shape)
+            print(df_val.shape)
 
-x_test = df_to_data(test)
+#            x_train = df_to_data(df_train)
+#            y_train = train[classes].values
+            x_val = df_to_data(df_val)
+            y_val = df_val[classes].values
+
+            model = None # Clearing the NN.
+            model = build_model()
+            RocAuc =  MyModelCheckpoint(
+                    'weights',
+                    validation_data=(x_val, y_val),
+                    monitor='roc_auc_score',
+                    save_best_only=True,
+                    verbose=1)
+
+            training_steps_per_epoch = round(len(df_train) / batch_size)
+            training_generator = data_generator(df_train, batch_size)
+            model.fit_generator(
+                training_generator,
+                steps_per_epoch=training_steps_per_epoch,
+                epochs=epoch,
+                callbacks=[RocAuc],
+            )
+            model.load_model('weights')
+            print(auc_roc_score(y_val, model.predict(x_val)))
+
+    x_test = df_to_data(test)
 #y_test = test[classes].values
-
-submission = pd.read_csv('../input/sample_submission.csv')
-y_pred = model.predict(x_test, batch_size=batch_size)
-submission[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]] = y_pred
-submission.to_csv('fastext_submission2.csv', index=False)
+    submission = pd.read_csv('../input/sample_submission.csv')
+    y_pred = model.predict(x_test, batch_size=batch_size)
+    submission[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]] = y_pred
+    submission.to_csv('fastext_submission2.csv', index=False)
