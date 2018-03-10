@@ -72,7 +72,7 @@ class MyModelCheckpoint(Callback):
         logs = logs or {}
         y_pred = self.model.predict(self.X_val, verbose=0)
         score = roc_auc_score(self.y_val, y_pred)
-        logs['auc_roc_score'] = score
+        logs['roc_auc_score'] = score
         print("\n ROC-AUC - epoch: {} - score: {:.6f}".format(epoch+1, score))
 
         self.epochs_since_last_save += 1
@@ -81,6 +81,7 @@ class MyModelCheckpoint(Callback):
             filepath = self.filepath.format(epoch=epoch + 1, **logs)
             if self.save_best_only:
                 current = logs.get(self.monitor)
+                print('current', current)
                 if current is None:
                     warnings.warn('Can save best model only with %s available, '
                                   'skipping.' % (self.monitor), RuntimeWarning)

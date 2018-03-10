@@ -1,7 +1,8 @@
 # Use scikit-learn to grid search the batch size and epochs
 from sklearn.model_selection import GridSearchCV, KFold
 from sklearn.cross_validation import StratifiedKFold
-from keras.models import Sequential
+from keras.models import Sequential, load_model
+
 from keras.layers import Dense
 from keras.wrappers.scikit_learn import KerasClassifier
 # Use scikit-learn to grid search the batch size and epochs
@@ -63,7 +64,7 @@ classes = [
     'toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate'
 ]
 
-def build_model():
+def build_model(optimizer):
     n_features = 300
     inp = Input(shape=(window_length, n_features ))
 #    x = Embedding(max_features, embed_size, weights=[embedding_matrix])(inp)
@@ -84,12 +85,11 @@ def build_model():
 
     model = Model(inputs=inp, outputs=outp)
     model.compile(loss='binary_crossentropy',
-                  optimizer='adam',
+                  optimizer=optimizer,
                   metrics=['accuracy'])
 
     model.summary()
     return model
-
 
 print('\nLoading FT model')
 ft_model =load_model('ft_model.bin')
@@ -125,30 +125,6 @@ def df_to_data(df):
 
     return x
 
-
-class RocAucEvaluation(Callback):
-    def __init__(self, validation_data=(), interval=1):
-        super(Callback, self).__init__()
-
-        self.interval = interval
-        self.X_val, self.y_val = validation_data
-
-    def on_epoch_end(self, epoch, logs={}):
-        if epoch % self.interval == 0:
-            y_pred = self.model.predict(self.X_val, verbose=0)
-            score = roc_auc_score(self.y_val, y_pred)
-            print("\n ROC-AUC - epoch: %d - score: %.6f \n" % (epoch+1, score))
-
-
-#x_test = df_to_data(test)
-#y_test = test[classes].values
-
-# Split the dataset:
-
-# Convert validation set to fixed array
-#x_val = df_to_data(df_val)
-#y_val = df_val[classes].values
-
 def data_generator(df, batch_size):
     """
     Given a raw dataframe, generates infinite batches of FastText vectors.
@@ -183,12 +159,15 @@ from customized_callback import MyModelCheckpoint
 
 if __name__=='__main__':
     n_folds = 10
+    epochs = 8
+    ## tuning parameters
     batch_sizes = [32, 128, 512, 1024]
-    epochs = [5]
+    optimizers = ['Adagrad', 'Adadelta', 'Adam', 'Adamax', 'Nadam']
     # Ready to start training:
     skf = KFold(n_splits=n_folds, shuffle=True, random_state=233).split(train)
-    for epoch, batch_size in zip(epochs, batch_sizes):
-        print(batch_size, epoch)
+    for optimizer, batch_size in zip(optimizers, batch_sizes):
+        print(optimizer, batch_size)
+
         for i, (trainidx, testidx) in enumerate(skf):
             if i >= 2: break
             print ("Running Fold", i+1, "/", n_folds)
@@ -204,9 +183,12 @@ if __name__=='__main__':
             y_val = df_val[classes].values
 
             model = None # Clearing the NN.
-            model = build_model()
+            model = build_model(optimizer)
+
+            filepath = 'model_{}_{}.h5'.format(batch_size, optimizer)
+
             RocAuc =  MyModelCheckpoint(
-                    'weights',
+                    filepath=filepath,
                     validation_data=(x_val, y_val),
                     monitor='roc_auc_score',
                     save_best_only=True,
@@ -217,10 +199,10 @@ if __name__=='__main__':
             model.fit_generator(
                 training_generator,
                 steps_per_epoch=training_steps_per_epoch,
-                epochs=epoch,
+                epochs=epochs,
                 callbacks=[RocAuc],
             )
-            model.load_model('weights')
+            model = load_model(filepath)
             print(auc_roc_score(y_val, model.predict(x_val)))
 
     x_test = df_to_data(test)
