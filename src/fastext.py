@@ -69,17 +69,12 @@ def build_model(optimizer):
     inp = Input(shape=(window_length, n_features ))
 #    x = Embedding(max_features, embed_size, weights=[embedding_matrix])(inp)
     x = SpatialDropout1D(0.5)(inp)
-    x = Bidirectional(GRU(320, return_sequences=True))(x)
-    x = SpatialDropout1D(0.5)(x)
-    x = Bidirectional(GRU(320, return_sequences=True))(x)
+    x = Bidirectional(GRU(128, return_sequences=True))(x)
     avg_pool = GlobalAveragePooling1D()(x)
     max_pool = GlobalMaxPooling1D()(x)
-#    print(max_pool.shape)
 #    def https://github.com/Wronskia/Sentiment-Analysis-on-Twitter-data.gitslice(x):
 #        return x[:,-1,:]
-    conc = concatenate([avg_pool, max_pool])
-    x = Dropout(0.5)(conc)
-    x = Dense(512)(x)
+    x = concatenate([avg_pool, max_pool])
     x = Dropout(0.5)(x)
     outp = Dense(6, activation="sigmoid")(x)
 

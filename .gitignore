@@ -1,1 +1,3 @@
 input/crawl-300d-2M.vec
+src/ft_model.bin
+input/train_augmented.csv
